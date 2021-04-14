@@ -44,12 +44,12 @@ end
 
 function generate_map(width, height, maxNumRooms, maxRoomWidth, maxRoomHeight)
   local map = {
-    width = width or 121,
+    width = width or 121,    -- 121 x 41 are nice default dimensions
     height = height or 41,
-    data = {},  -- 1d buffer of tiles, just 0 and 1 for now
+    data = {},  -- 1d buffer of tiles, just 0 = wall and 1 = ground for now
     entities = {}   
     -- keep separate tables for different types of entities?
-    -- depends on what type of collision/interaction checks we want
+    -- could also be a hashmap type of thing with coordinates as keys and entities as values
   }
   
   -- maps must have uneven dimensions because we dont use edges
@@ -70,11 +70,13 @@ function generate_map(width, height, maxNumRooms, maxRoomWidth, maxRoomHeight)
   while #toVisit > 0 do
     local current = toVisit[#toVisit]
     
-    -- my decision to stick to a 1d flat array has made this somewhat ugly
+    -- my decision to stick to a 1d flat array has perhaps made this somewhat convoluted
+    -- 2d arrays would probably be more readable and more consistent with luas level of abstraction
+    -- also, in a real thing we would probably have some kind of vector2 or point2d struct
     local currentX = current % map.width
     local currentY = math.floor(current / map.width)
     
-    ---@todo: refactor into function that returns the toConsider array?
+    ---@todo: refactor into function that returns the toConsider array? if it comes up again
     local toConsider = {}
     if currentY - 2 > 1 and map.data[current - (map.width * 2)] == 0 then
       table.insert(toConsider, -map.width)
@@ -89,13 +91,13 @@ function generate_map(width, height, maxNumRooms, maxRoomWidth, maxRoomHeight)
       table.insert(toConsider, -1)
     end
     
-    if #toConsider > 0 then
+    if #toConsider > 0 then  -- do we have any tiles to carve to?
       local dir = toConsider[math.ceil(math.random(#toConsider))]
       map.data[current + dir] = 1
       map.data[current + (dir * 2)] = 1
       table.insert(toVisit, current + (dir * 2))
     else 
-      table.remove(toVisit)
+      table.remove(toVisit)  -- if we cant carve from this tile, we are done with it
     end
   end
   
@@ -104,9 +106,9 @@ function generate_map(width, height, maxNumRooms, maxRoomWidth, maxRoomHeight)
   -- the original solution confined rooms to a grid, which works great for games like spelunky or binding of isaac
   -- that does not use smooth scrolling. the reason the grided solution was scrapped was because it was difficult
   -- to parameterize in a meaningful way; api user would have to select a grid size that is a factor of the width and
-  -- height which is already constrained to be uneven :C ... i should have gone with bsp or brute force and move apart approach.
+  -- height, which is already constrained to be uneven :C ... i should have gone with bsp or brute force and move apart approach.
   local numRooms = math.random(maxNumRooms)
-  for i=1, maxNumRooms do
+  for i=1, numRooms do
     local roomSizeX = math.random(2, maxRoomWidth)
     local roomSizeY = math.random(2, maxRoomHeight)
     local xOffset = math.random(2, map.width - roomSizeX - 2)
@@ -122,12 +124,15 @@ function generate_map(width, height, maxNumRooms, maxRoomWidth, maxRoomHeight)
   for y = 1, map.height do
     for x = 1, map.width do
       if map.data[y * map.width + x] == 1 then
+        -- we could have a percentage range but i think from a design perspective it is easier to think about dice
+        -- because we get nice bell curves in the distrobution, i.e. 7 will be the most common outcome of 2d6.
         local objectRoll = dice(3, 6)
-        if objectRoll == 18 then
+        if objectRoll == 18 then -- "critical hit" - a treasure! (10-100 gold coins)
           table.insert(map.entities, make_entity(map, "treasure", x, y, math.random(10, 100)))
-        elseif objectRoll == 3 then
+        elseif objectRoll == 3 then -- "critical miss" - a monster!
           local monsterRoll = dice(2, 6)
           -- monster roll is just a numerical value into lookup table
+          -- "fiend" will be most common (7) while "celestial" (2) and "dragon" (12) the most rare
           table.insert(map.entities, make_entity(map, "monster", x, y, monsterRoll))
         end
       end
@@ -178,7 +183,5 @@ function pretty_print_to_console(map)
 end
 
 math.randomseed(os.time())  -- fine for now
-world = generate_map(32, 32, 8, 8, 8)
+world = generate_map(65, 33, 8, 8, 16)
 pretty_print_to_console(world)
-
-
